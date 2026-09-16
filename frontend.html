@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<meta charset="UTF-8">
+<title>Scholar Research Assistant</title>
+<style>
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 0 20px;
+    background: #fafafa;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 24px; }
+  .search-box {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  input {
+    flex: 1;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  button {
+    padding: 12px 20px;
+    font-size: 16px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:disabled { background: #999; }
+  #status { color: #666; font-style: italic; }
+  .brief {
+    white-space: pre-wrap;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    margin-top: 20px;
+    line-height: 1.6;
+  }
+  .papers {
+    margin-top: 20px;
+  }
+  .paper {
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+  }
+  .paper a { color: #2563eb; text-decoration: none; }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e5e7eb;
+    margin-left: 8px;
+  }
+  .brief table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.brief th, .brief td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
+.brief th { background: #f3f4f6; }
+</style>
+</head>
+<body>
+
+<h1>Scholar Research Assistant</h1>
+<p>Enter a research topic to get a citation-grounded brief.</p>
+
+<div class="search-box">
+  <input type="text" id="query" placeholder="e.g. intermittent fasting insulin resistance" />
+  <button id="searchBtn" onclick="runSearch()">Research</button>
+</div>
+
+<div id="status"></div>
+<div id="result"></div>
+
+<script>
+async function runSearch() {
+  const query = document.getElementById('query').value.trim();
+  if (!query) return;
+
+  const btn = document.getElementById('searchBtn');
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+
+  btn.disabled = true;
+  status.textContent = "Searching and synthesizing... this can take 10-20 seconds.";
+  result.innerHTML = "";
+
+  try {
+    const res = await fetch('http://127.0.0.1:8000/research', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+    const data = await res.json();
+    status.textContent = "";
+
+    let html = `<div class="brief">${marked.parse(data.brief)}</div>`;
+
+    if (data.papers && data.papers.length > 0) {
+      html += `<div class="papers"><h3>Sources (${data.papers.length})</h3>`;
+      data.papers.forEach(p => {
+        html += `<div class="paper">
+          <a href="${p.link}" target="_blank">${escapeHtml(p.title)}</a>
+          <span class="tag">${p.year_type}</span>
+          ${p.cited_by ? `<span class="tag">${p.cited_by} citations</span>` : ""}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (data.adjacent_papers && data.adjacent_papers.length > 0) {
+      html += `<div class="papers"><h3>Related (not directly on-topic)</h3>`;
+      data.adjacent_papers.forEach(p => {
+        html += `<div class="paper">
+          <a href="${p.link}" target="_blank">${escapeHtml(p.title)}</a>
+          <span class="tag">${p.year_type}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    result.innerHTML = html;
+  } catch (err) {
+    status.textContent = "Error: " + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+document.getElementById('query').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runSearch();
+});
+</script>
+
+</body>
+</html>

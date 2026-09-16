@@ -43,8 +43,10 @@ If a group is empty, use an empty array. No explanation."""
         result = json.loads(raw[start:end])
         direct = [papers[i - 1] for i in result.get("direct", []) if 1 <= i <= len(papers)]
         adjacent = [papers[i - 1] for i in result.get("adjacent", []) if 1 <= i <= len(papers)]
-    except (ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError) as e:
+        print("RELEVANCE PARSING FAILED")
+        print("Raw AI response was:", raw)
+        print("Error:", e)
         direct, adjacent = [], []
 
     return direct, adjacent
-    return [papers[i - 1] for i in relevant_indices if 1 <= i <= len(papers)]
