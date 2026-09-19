@@ -1,139 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <meta charset="UTF-8">
 <title>Scholar Research Assistant</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <style>
-  body {
-    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 0 20px;
-    background: #fafafa;
-    color: #1a1a1a;
-  }
-  h1 { font-size: 24px; }
-  .search-box {
-    display: flex;
-    gap: 10px;
-    margin: 20px 0;
-  }
-  input {
-    flex: 1;
-    padding: 12px;
-    font-size: 16px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-  }
-  button {
-    padding: 12px 20px;
-    font-size: 16px;
-    background: #2563eb;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  button:disabled { background: #999; }
-  #status { color: #666; font-style: italic; }
-  .brief {
-    white-space: pre-wrap;
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    border: 1px solid #eee;
-    margin-top: 20px;
-    line-height: 1.6;
-  }
-  .papers {
-    margin-top: 20px;
-  }
-  .paper {
-    padding: 10px 0;
-    border-bottom: 1px solid #eee;
-    font-size: 14px;
-  }
-  .paper a { color: #2563eb; text-decoration: none; }
-  .tag {
-    display: inline-block;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: #e5e7eb;
-    margin-left: 8px;
-  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; }
   .brief table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-.brief th, .brief td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
-.brief th { background: #f3f4f6; }
+  .brief th, .brief td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-size: 14px; }
+  .brief th { background: #f9fafb; font-weight: 600; }
+  .brief p { margin-bottom: 10px; line-height: 1.6; }
+  .spinner {
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #2563eb;
+    border-radius: 50%;
+    width: 20px; height: 20px;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tab-btn { transition: all 0.15s; }
+  .tab-btn.active { background: #2563eb; color: white; }
+  .tab-btn:not(.active) { background: #f3f4f6; color: #4b5563; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 </style>
 </head>
-<body>
+<body class="bg-gray-50 min-h-screen">
 
-<h1>Scholar Research Assistant</h1>
-<p>Enter a research topic to get a citation-grounded brief.</p>
+<div class="max-w-6xl mx-auto px-6 py-10">
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">Scholar Research Assistant</h1>
+    <p class="text-gray-500 mt-2">Get a citation-grounded research brief from real academic literature.</p>
+  </div>
 
-<div class="search-box">
-  <input type="text" id="query" placeholder="e.g. intermittent fasting insulin resistance" />
-  <button id="searchBtn" onclick="runSearch()">Research</button>
+  <div class="flex gap-3 mb-2 max-w-3xl mx-auto">
+    <input id="query" type="text"
+      placeholder="e.g. intermittent fasting insulin resistance"
+      class="flex-1 px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"/>
+    <button id="searchBtn" onclick="runSearch()"
+      class="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-xl shadow-sm transition">
+      Research
+    </button>
+  </div>
+
+  <div class="max-w-3xl mx-auto mb-4 flex items-center gap-2">
+    <input type="checkbox" id="checkPatents" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+    <label for="checkPatents" class="text-sm text-gray-600">
+      Also check patent activity for open gaps <span class="text-gray-400">(slower — takes 1-2 extra minutes)</span>
+    </label>
+  </div>
+  <div id="status" class="flex items-center justify-center gap-2 text-gray-500 text-sm h-6 mb-4"></div>
+  <div id="result"></div>
 </div>
 
-<div id="status"></div>
-<div id="result"></div>
-
 <script>
-async function runSearch() {
-  const query = document.getElementById('query').value.trim();
-  if (!query) return;
-
-  const btn = document.getElementById('searchBtn');
-  const status = document.getElementById('status');
-  const result = document.getElementById('result');
-
-  btn.disabled = true;
-  status.textContent = "Searching and synthesizing... this can take 10-20 seconds.";
-  result.innerHTML = "";
-
-  try {
-    const res = await fetch('http://127.0.0.1:8000/research', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
-    const data = await res.json();
-    status.textContent = "";
-
-    let html = `<div class="brief">${marked.parse(data.brief)}</div>`;
-
-    if (data.papers && data.papers.length > 0) {
-      html += `<div class="papers"><h3>Sources (${data.papers.length})</h3>`;
-      data.papers.forEach(p => {
-        html += `<div class="paper">
-          <a href="${p.link}" target="_blank">${escapeHtml(p.title)}</a>
-          <span class="tag">${p.year_type}</span>
-          ${p.cited_by ? `<span class="tag">${p.cited_by} citations</span>` : ""}
-        </div>`;
-      });
-      html += `</div>`;
-    }
-
-    if (data.adjacent_papers && data.adjacent_papers.length > 0) {
-      html += `<div class="papers"><h3>Related (not directly on-topic)</h3>`;
-      data.adjacent_papers.forEach(p => {
-        html += `<div class="paper">
-          <a href="${p.link}" target="_blank">${escapeHtml(p.title)}</a>
-          <span class="tag">${p.year_type}</span>
-        </div>`;
-      });
-      html += `</div>`;
-    }
-
-    result.innerHTML = html;
-  } catch (err) {
-    status.textContent = "Error: " + err.message;
-  } finally {
-    btn.disabled = false;
+function splitBriefIntoSections(brief) {
+  const pattern = /(^|\n)\s*\*{0,2}\s*([123])\.\s*([^\n*]+)\*{0,2}/g;
+  let matches = [...brief.matchAll(pattern)];
+  if (matches.length < 3) {
+    return [{ title: "Brief", content: brief }];
   }
+  let sections = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : brief.length;
+    const title = matches[i][3].trim();
+    const content = brief.slice(start, end).trim();
+    sections.push({ title, content });
+  }
+  return sections;
+}
+
+function renderTabs(sections) {
+  let tabsHtml = `<div class="flex gap-2 mb-4 flex-wrap">`;
+  sections.forEach((s, i) => {
+    tabsHtml += `<button onclick="switchTab(${i})" id="tabbtn-${i}"
+      class="tab-btn ${i === 0 ? 'active' : ''} px-4 py-2 rounded-lg text-sm font-medium">
+      ${escapeHtml(s.title)}
+    </button>`;
+  });
+  tabsHtml += `</div>`;
+
+  let panelsHtml = "";
+  sections.forEach((s, i) => {
+    panelsHtml += `<div id="tabpanel-${i}" class="tab-panel brief text-gray-800 ${i === 0 ? 'active' : ''}">
+      ${marked.parse(s.content)}
+    </div>`;
+  });
+  return tabsHtml + panelsHtml;
+}
+
+function switchTab(index) {
+  document.querySelectorAll('.tab-btn').forEach((el, i) => {
+    el.classList.toggle('active', i === index);
+  });
+  document.querySelectorAll('.tab-panel').forEach((el, i) => {
+    el.classList.toggle('active', i === index);
+  });
+}
+
+function toggleSources(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('hidden');
 }
 
 function escapeHtml(str) {
@@ -142,10 +112,136 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function renderPatentActivity(patentActivity) {
+  if (!patentActivity || patentActivity.length === 0) return "";
+
+  let html = `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-1">Patent Activity for Open Gaps</h3>
+      <p class="text-sm text-gray-500 mb-4">Ranked lowest to highest — lower activity suggests an angle that's comparatively less commercially explored, not necessarily zero activity.</p>
+      <div class="space-y-3">`;
+
+  patentActivity.forEach((r, i) => {
+    const isLowest = i === 0;
+    html += `
+      <div class="border rounded-xl p-4 ${isLowest ? 'border-green-300 bg-green-50' : 'border-gray-200'}">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-medium text-gray-900">${escapeHtml(r.query)}</div>
+          <div class="text-xs px-2 py-1 rounded-full ${isLowest ? 'bg-green-200 text-green-800' : 'bg-gray-100 text-gray-600'}">
+            ${r.total_patents.toLocaleString()} patents
+          </div>
+        </div>`;
+    if (r.sample_patents && r.sample_patents.length > 0) {
+      html += `<div class="text-xs text-gray-500 space-y-1 mt-2">`;
+      r.sample_patents.slice(0, 2).forEach(p => {
+        html += `<div>• <a href="${p.link}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(p.title || '')}</a> ${p.assignee ? '— ' + escapeHtml(p.assignee) : ''}</div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+  });
+
+  html += `</div></div>`;
+  return html;
+}
+
+async function runSearch() {
+  const query = document.getElementById('query').value.trim();
+  if (!query) return;
+
+  const checkPatents = document.getElementById('checkPatents').checked;
+  const btn = document.getElementById('searchBtn');
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+
+  btn.disabled = true;
+  const waitMsg = checkPatents
+    ? "Searching, synthesizing, and checking patents... this can take 2-3 minutes."
+    : "Searching and synthesizing... this can take 10-20 seconds.";
+  status.innerHTML = `<span class="spinner"></span> ${waitMsg}`;
+  result.innerHTML = "";
+
+  try {
+    const res = await fetch('http://127.0.0.1:8000/research', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, check_patents: checkPatents })
+    });
+
+    if (!res.ok) {
+      let errMsg = "Something went wrong. Please try again.";
+      try {
+        const errData = await res.json();
+        if (errData && errData.detail) errMsg = errData.detail;
+      } catch (parseErr) {}
+      status.innerHTML = `<span class="text-red-500">${escapeHtml(errMsg)}</span>`;
+      return;
+    }
+
+    const data = await res.json();
+    status.innerHTML = "";
+
+    const sections = splitBriefIntoSections(data.brief);
+
+    let mainHtml = `
+      <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        ${renderTabs(sections)}
+      </div>`;
+
+    let sidebarHtml = `<div class="lg:col-span-1 space-y-4 lg:sticky lg:top-6">`;
+
+    if (data.papers && data.papers.length > 0) {
+      sidebarHtml += `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+          <button onclick="toggleSources('sources-list')" class="w-full text-left font-semibold text-gray-900 mb-2 flex items-center justify-between">
+            <span>Sources (${data.papers.length})</span>
+            <span class="text-xs text-gray-400">tap to expand</span>
+          </button>
+          <div id="sources-list" class="space-y-2 max-h-96 overflow-y-auto hidden">`;
+      data.papers.forEach(p => {
+        const tagColor = p.year_type === 'recent' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+        sidebarHtml += `
+          <a href="${p.link}" target="_blank"
+             class="block bg-gray-50 rounded-lg border border-gray-200 p-3 hover:border-blue-400 transition">
+            <div class="text-xs font-medium text-gray-900 mb-1">${escapeHtml(p.title)}</div>
+            <div class="flex gap-1 flex-wrap">
+              <span class="text-[10px] px-2 py-0.5 rounded-full ${tagColor}">${p.year_type}</span>
+              ${p.cited_by ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">${p.cited_by} cites</span>` : ""}
+            </div>
+          </a>`;
+      });
+      sidebarHtml += `</div></div>`;
+    }
+
+    if (data.adjacent_papers && data.adjacent_papers.length > 0) {
+      sidebarHtml += `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+          <button onclick="toggleSources('adjacent-list')" class="w-full text-left font-semibold text-gray-500 mb-2 flex items-center justify-between">
+            <span>Related (${data.adjacent_papers.length})</span>
+            <span class="text-xs text-gray-400">tap to expand</span>
+          </button>
+          <div id="adjacent-list" class="space-y-2 max-h-72 overflow-y-auto hidden">`;
+      data.adjacent_papers.forEach(p => {
+        sidebarHtml += `
+          <a href="${p.link}" target="_blank"
+             class="block bg-gray-50 rounded-lg border border-gray-200 p-3 hover:border-gray-400 transition">
+            <div class="text-xs text-gray-600">${escapeHtml(p.title)}</div>
+          </a>`;
+      });
+      sidebarHtml += `</div></div>`;
+    }
+    sidebarHtml += `</div>`;
+    const patentHtml = renderPatentActivity(data.patent_activity);
+    result.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">${mainHtml}${sidebarHtml}</div>${patentHtml ? `<div class="mt-6">${patentHtml}</div>` : ""}`;
+  } catch (err) {
+    status.innerHTML = `<span class="text-red-500">Something went wrong. Please try again in a moment.</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
 document.getElementById('query').addEventListener('keydown', e => {
   if (e.key === 'Enter') runSearch();
 });
 </script>
-
 </body>
 </html>
